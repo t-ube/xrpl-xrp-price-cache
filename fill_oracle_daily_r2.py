@@ -104,46 +104,51 @@ def save_json_to_r2(data: dict) -> None:
 
 # ========= Binance XRPUSDT 日足 =========
 
-def fetch_xrp_usdt_daily(dt_start: datetime, dt_end: datetime) -> Dict[str, float]:
-    url = f"{BINANCE_BASE_URL}/api/v3/klines"
+def fetch_xrp_usdt_daily(start_dt, end_dt):
+    """
+    Kraken から日足終値 (close) を取得する。
+    return: dict["YYYY-MM-DD"] = float(close)
+    """
+    since = int(start_dt.timestamp())
 
-    start_ms = dt_to_ms(dt_start)
-    end_ms = dt_to_ms(dt_end)
-    all_klines = []
+    url = "https://api.kraken.com/0/public/OHLC"
+    params = {
+        "pair": "XRPUSD",   # Krakenは内部で XXRPZUSD に変換する場合あり
+        "interval": 1440,   # 1日足
+        "since": since,
+    }
 
-    while True:
-        params = {
-            "symbol": BINANCE_SYMBOL,
-            "interval": BINANCE_INTERVAL,
-            "startTime": start_ms,
-            "endTime": end_ms,
-            "limit": BINANCE_LIMIT,
-        }
-        print("[BINANCE] GET", params)
-        res = requests.get(url, params=params, timeout=15)
-        res.raise_for_status()
-        klines = res.json()
-        if not klines:
+    print("[KRAKEN] GET", params)
+    res = requests.get(url, params=params, timeout=10)
+    res.raise_for_status()
+
+    data = res.json()
+
+    # エラーがあったら空で返す
+    if data.get("error"):
+        print("[KRAKEN] API Error:", data["error"])
+        return {}
+
+    # Kraken は "XRPUSD" と指定しても結果キーが "XXRPZUSD" になる
+    result_key = None
+    for key in data["result"].keys():
+        if key.startswith("XXRP") and key.endswith("USD"):
+            result_key = key
             break
 
-        all_klines.extend(klines)
+    if not result_key:
+        print("[KRAKEN] Unexpected result keys:", data["result"].keys())
+        return {}
 
-        last_open = klines[-1][0]
-        if last_open >= end_ms or len(klines) < BINANCE_LIMIT:
-            break
+    ohlc_list = data["result"][result_key]
 
-        start_ms = last_open + 1
-        time.sleep(0.25)
+    daily = {}
+    for entry in ohlc_list:
+        ts = entry[0]                # UNIX timestamp (UTC)
+        close_price = float(entry[4])  # close
+        day = datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+        daily[day] = close_price
 
-    daily: Dict[str, float] = {}
-    for k in all_klines:
-        open_ms = k[0]
-        close_price = float(k[4])
-        open_dt = datetime.fromtimestamp(open_ms / 1000, tz=timezone.utc)
-        date_key = dt_to_date_str(open_dt)
-        daily[date_key] = close_price
-
-    print(f"[BINANCE] XRPUSDT 日足件数: {len(daily)}")
     return daily
 
 
