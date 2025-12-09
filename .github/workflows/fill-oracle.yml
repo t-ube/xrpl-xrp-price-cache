@@ -1,0 +1,35 @@
+name: Fill XRP Oracle Daily (R2)
+
+on:
+  schedule:
+    # 毎日 01:10 UTC 実行（JST 10:10）
+    - cron: "10 1 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  fill-oracle-daily:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run fill_oracle_daily_r2.py
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}          # 例: xrp-price
+          R2_OBJECT_KEY: ${{ secrets.R2_OBJECT_KEY }}  # 例: xrp_oracle_daily.json
+          INITIAL_START_DATE: ${{ secrets.INITIAL_START_DATE }} # 例: 2022-10-01
+        run: |
+          python fill_oracle_daily_r2.py
