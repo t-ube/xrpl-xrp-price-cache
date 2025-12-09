@@ -2,26 +2,23 @@
 GitHub Actions から実行して、
 R2 上の xrp_oracle_daily.json を差分更新するスクリプト。
 
-- R2 へのアクセスは Cloudflare API Token (Bearer) で行う
 - Binance: XRPUSDT 日足 close
 - Frankfurter: USD/JPY 日次（平日）。土日等は直前営業日のレートを継承。
 """
 
 import json
-import os
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict
-
 import requests
-from urllib.parse import quote
+import boto3
+import os
+from botocore.exceptions import ClientError
 
 # ========= 環境変数 =========
-# Cloudflare
-CF_API_TOKEN = os.environ["CLOUDFLARE_API_TOKEN"]
-CF_ACCOUNT_ID = os.environ["CLOUDFLARE_ACCOUNT_ID"]
-
-# R2
+R2_ACCESS_KEY_ID = os.environ["R2_ACCESS_KEY_ID"]
+R2_SECRET_ACCESS_KEY = os.environ["R2_SECRET_ACCESS_KEY"]
+R2_ENDPOINT = os.environ["R2_ENDPOINT"]          # https://<ACCOUNT>.r2.cloudflarestorage.com
 R2_BUCKET = os.environ["R2_BUCKET"]
 R2_OBJECT_KEY = os.environ.get("R2_OBJECT_KEY", "xrp_oracle_daily.json")
 
@@ -36,6 +33,14 @@ BINANCE_LIMIT = 1000
 
 FX_BASE_URL = "https://api.frankfurter.app"
 
+# ========= R2 クライアント作成 =========
+s3 = boto3.client(
+    service_name="s3",
+    endpoint_url=R2_ENDPOINT,
+    aws_access_key_id=R2_ACCESS_KEY_ID,
+    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+    region_name="auto",
+)
 
 # ========= 日付ユーティリティ =========
 
@@ -63,30 +68,19 @@ def dt_to_ms(dt: datetime) -> int:
 
 
 # ========= R2 JSON 読み書き (Cloudflare API) =========
-
-def r2_object_url() -> str:
-    key_enc = quote(R2_OBJECT_KEY, safe="")
-    return (
-        f"https://api.cloudflare.com/client/v4/accounts/"
-        f"{CF_ACCOUNT_ID}/r2/buckets/{R2_BUCKET}/objects/{key_enc}"
-    )
-
-
 def load_json_from_r2() -> dict:
-    url = r2_object_url()
-    headers = {
-        "Authorization": f"Bearer {CF_API_TOKEN}",
-    }
-    print(f"[R2] GET {url}")
-    res = requests.get(url, headers=headers, timeout=20)
-
-    if res.status_code == 404:
-        print(f"[R2] オブジェクトが存在しません。新規作成します: {R2_BUCKET}/{R2_OBJECT_KEY}")
-        data = {"meta": {"version": 1, "last_date": None}, "daily": {}}
-    else:
-        res.raise_for_status()
-        data = res.json()
-        print(f"[R2] 既存JSONを読み込み: {R2_BUCKET}/{R2_OBJECT_KEY}")
+    try:
+        print(f"[R2] get_object bucket={R2_BUCKET} key={R2_OBJECT_KEY}")
+        res = s3.get_object(Bucket=R2_BUCKET, Key=R2_OBJECT_KEY)
+        body = res["Body"].read()
+        data = json.loads(body.decode("utf-8"))
+        print("[R2] 既存JSONを読み込みました")
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("NoSuchKey", "NoSuchBucket"):
+            print("[R2] オブジェクトがないので新規作成します")
+            data = {"meta": {"version": 1, "last_date": None}, "daily": {}}
+        else:
+            raise
 
     daily = data.get("daily", {})
     max_date = max(daily.keys()) if daily else None
@@ -102,16 +96,10 @@ def load_json_from_r2() -> dict:
 
 
 def save_json_to_r2(data: dict) -> None:
-    url = r2_object_url()
-    headers = {
-        "Authorization": f"Bearer {CF_API_TOKEN}",
-        "Content-Type": "application/json",
-    }
-    body = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    print(f"[R2] PUT {url}")
-    res = requests.put(url, headers=headers, data=body.encode("utf-8"), timeout=30)
-    res.raise_for_status()
-    print(f"[R2] JSONを保存しました: {R2_BUCKET}/{R2_OBJECT_KEY}")
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    print(f"[R2] put_object bucket={R2_BUCKET} key={R2_OBJECT_KEY}")
+    s3.put_object(Bucket=R2_BUCKET, Key=R2_OBJECT_KEY, Body=body, ContentType="application/json")
+    print("[R2] JSON を保存しました")
 
 
 # ========= Binance XRPUSDT 日足 =========
