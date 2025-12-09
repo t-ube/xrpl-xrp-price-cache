@@ -26,7 +26,7 @@ R2_OBJECT_KEY = os.environ.get("R2_OBJECT_KEY", "xrp_oracle_daily.json")
 INITIAL_START_DATE = os.environ.get("INITIAL_START_DATE", "2022-10-01")
 
 # 市場データ
-BINANCE_BASE_URL = "https://api.binance.com"
+BINANCE_BASE_URL = "https://api2.binance.com"
 BINANCE_SYMBOL = "XRPUSDT"
 BINANCE_INTERVAL = "1d"
 BINANCE_LIMIT = 1000
