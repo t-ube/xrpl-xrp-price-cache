@@ -1,6 +1,8 @@
 name: Fill XRP Oracle Daily (R2)
 
 on:
+  repository_dispatch:
+    types: [cron-job]
   workflow_dispatch: {}
 
 jobs:
