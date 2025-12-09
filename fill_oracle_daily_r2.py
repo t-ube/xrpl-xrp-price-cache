@@ -2,7 +2,7 @@
 GitHub Actions から実行して、
 R2 上の xrp_oracle_daily.json を差分更新するスクリプト。
 
-- Binance: XRPUSDT 日足 close
+- Kraken: XRPUSDT 日足 close
 - Frankfurter: USD/JPY 日次（平日）。土日等は直前営業日のレートを継承。
 """
 
@@ -102,7 +102,7 @@ def save_json_to_r2(data: dict) -> None:
     print("[R2] JSON を保存しました")
 
 
-# ========= Binance XRPUSDT 日足 =========
+# ========= Kraken XRPUSDT 日足 =========
 
 def fetch_xrp_usdt_daily(start_dt, end_dt):
     """
