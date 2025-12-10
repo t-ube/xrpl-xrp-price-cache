@@ -221,11 +221,11 @@ def fill_missing_dates() -> None:
             continue
 
         jpy = usd * last_rate
-        daily[d] = {"usd": usd, "jpy": jpy}
+        daily[d] = {"USD": usd, "JPY": jpy}
         data["meta"]["last_date"] = d
         added += 1
 
-        print(f"[ADD] {d}: usd={usd}, jpy={jpy}")
+        print(f"[ADD] {d}: USD={usd}, JPY={jpy}")
         cur_dt += timedelta(days=1)
 
     save_json_to_r2(data)
